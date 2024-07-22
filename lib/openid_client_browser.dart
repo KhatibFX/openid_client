@@ -1,6 +1,8 @@
-import 'openid_client.dart';
-import 'dart:html' hide Credential, Client;
 import 'dart:async';
+import 'dart:html' hide Credential, Client;
+
+import 'openid_client.dart';
+
 export 'openid_client.dart';
 
 /// A wrapper around [Flow] that handles the browser-specific parts of
@@ -34,14 +36,16 @@ class Authenticator {
 
   Authenticator._(this.flow) : credential = _credentialFromUri(flow);
 
-  Authenticator(Client client,
-      {Iterable<String> scopes = const [], String? device, String? prompt})
-      : this._(Flow.implicit(client,
-            device: device,
-            state: window.localStorage['openid_client:state'],
-            prompt: prompt)
+  Authenticator(Client client, {Iterable<String> scopes = const [], String? device, String? prompt})
+      : this._(Flow.implicit(client, device: device, state: window.localStorage['openid_client:state'], prompt: prompt)
           ..scopes.addAll(scopes)
           ..redirectUri = Uri.parse(window.location.href).removeFragment());
+  Authenticator.authCode(Client client, {Iterable<String> scopes = const [], String? prompt, Uri? redirectUri})
+      : this._(Flow.authorizationCode(client,
+            redirectUri: redirectUri ?? Uri.parse(window.location.href).removeFragment(),
+            scopes: scopes.toList(),
+            state: window.localStorage['openid_client:state'],
+            prompt: prompt));
 
   /// Redirects the browser to the authentication URI.
   void authorize() {
@@ -53,8 +57,7 @@ class Authenticator {
   void logout() async {
     var c = await credential;
     if (c == null) return;
-    var uri = c.generateLogoutUrl(
-        redirectUri: Uri.parse(window.location.href).removeFragment());
+    var uri = c.generateLogoutUrl(redirectUri: Uri.parse(window.location.href).removeFragment());
     if (uri != null) {
       window.location.href = uri.toString();
     }
@@ -65,11 +68,8 @@ class Authenticator {
     var iframe = uri.queryParameters['iframe'] != null;
     uri = Uri(query: uri.fragment);
     var q = uri.queryParameters;
-    if (q.containsKey('access_token') ||
-        q.containsKey('code') ||
-        q.containsKey('id_token')) {
-      window.history.replaceState(
-          '', '', Uri.parse(window.location.href).removeFragment().toString());
+    if (q.containsKey('access_token') || q.containsKey('code') || q.containsKey('id_token')) {
+      window.history.replaceState('', '', Uri.parse(window.location.href).removeFragment().toString());
       window.localStorage.remove('openid_client:state');
 
       var c = await flow.callback(q.cast());
@@ -87,8 +87,7 @@ class Authenticator {
   /// when the iframe receives a response from the authorization server. The
   /// future will timeout after [timeout] if the iframe does not receive a
   /// response.
-  Future<Credential> trySilentRefresh(
-      {Duration timeout = const Duration(seconds: 20)}) async {
+  Future<Credential> trySilentRefresh({Duration timeout = const Duration(seconds: 20)}) async {
     var iframe = IFrameElement();
     var url = flow.authenticationUri;
     window.localStorage['openid_client:state'] = flow.state;
@@ -112,13 +111,11 @@ class Authenticator {
           accessToken: event.data['access_token'],
           expiresAt: event.data['expires_at'] == null
               ? null
-              : DateTime.fromMillisecondsSinceEpoch(
-                  int.parse(event.data['expires_at'].toString()) * 1000),
+              : DateTime.fromMillisecondsSinceEpoch(int.parse(event.data['expires_at'].toString()) * 1000),
           refreshToken: event.data['refresh_token'],
           expiresIn: event.data['expires_in'] == null
               ? null
-              : Duration(
-                  seconds: int.parse(event.data['expires_in'].toString())),
+              : Duration(seconds: int.parse(event.data['expires_in'].toString())),
           tokenType: event.data['token_type'],
           idToken: event.data['id_token'],
         );
